@@ -7,6 +7,7 @@ import Home from './pages/Home'
 import Login from './pages/Login'
 import Signup from './pages/Signup'
 import Explore from './pages/Explore'
+import MapPage from './pages/MapPage'
 import MonasteryDetail from './pages/MonasteryDetail'
 import MonasteryWiki from './pages/MonasteryWiki'
 import Profile from './pages/Profile'
@@ -28,6 +29,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
           <Route path="/explore" element={<Explore />} />
+          <Route path="/map" element={<MapPage />} />
           <Route path="/monastery/:id" element={<MonasteryDetail />} />
           <Route path="/monastery/:id/wiki" element={<MonasteryWiki />} />
           <Route path="/profile" element={<Profile />} />

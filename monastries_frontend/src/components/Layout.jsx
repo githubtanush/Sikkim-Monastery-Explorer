@@ -33,6 +33,7 @@ export function Layout({ children, noHero }) {
           </Link>
           <div className="flex items-center gap-2 sm:gap-4">
             <Link to="/explore" className="text-sm text-amber-100/90 hover:text-amber-50 transition hidden sm:inline">Explore</Link>
+            <Link to="/map" className="text-sm text-amber-100/90 hover:text-amber-50 transition">Map</Link>
             <Link to="/leaderboard" className="text-sm text-amber-100/90 hover:text-amber-50 transition hidden sm:inline">Leaderboard</Link>
             {isAdmin && (
               <Link to="/admin" className="flex items-center gap-1 text-sm text-amber-400 hover:text-amber-300">
