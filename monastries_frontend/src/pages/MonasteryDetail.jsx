@@ -2,11 +2,29 @@ import { useState, useEffect } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { MapPin, Star, Calendar, Hotel, Compass, BookOpen, Users, Church, Sparkles, Mountain, Clock, AlertTriangle } from 'lucide-react'
-import { api, getErrorMessage } from '../api'
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
+import L from 'leaflet'
+import 'leaflet/dist/leaflet.css'
+import { api, getErrorMessage, locationAPI } from '../api'
 import { useAuth } from '../context/AuthContext'
 import { validateBooking } from '../utils/validation'
 import { Layout } from '../components/Layout'
 import { SkeletonDetail } from '../components/SkeletonCard'
+
+const TYPE_META = {
+  Hotel: { symbol: '🏨', color: '#3b82f6', label: 'Hotel' },
+  Restaurant: { symbol: '🍽️', color: '#ef4444', label: 'Restaurant' },
+  Shop: { symbol: '🛍️', color: '#a855f7', label: 'Shop' },
+  'Tourist Attraction': { symbol: '📸', color: '#f59e0b', label: 'Tourist Attraction' },
+  'Food Court': { symbol: '🍜', color: '#f97316', label: 'Food Court' },
+  Cafe: { symbol: '☕', color: '#14b8a6', label: 'Cafe' },
+  Guesthouse: { symbol: '🏠', color: '#22c55e', label: 'Guesthouse' },
+  Other: { symbol: '📍', color: '#10b981', label: 'Other' },
+}
+
+function getTypeMeta(type) {
+  return TYPE_META[type] || TYPE_META.Other
+}
 
 export default function MonasteryDetail() {
   const { id } = useParams()
@@ -14,6 +32,7 @@ export default function MonasteryDetail() {
   const { user } = useAuth()
   const [monastery, setMonastery] = useState(null)
   const [travelGuide, setTravelGuide] = useState(null)
+  const [userLocations, setUserLocations] = useState([])
   const [loading, setLoading] = useState(true)
   const [guideLoading, setGuideLoading] = useState(false)
   const [bookingForm, setBookingForm] = useState({ visitDate: '', numberOfPeople: 1, contactNumber: '' })
@@ -46,6 +65,20 @@ export default function MonasteryDetail() {
       .finally(() => { if (!cancelled) setGuideLoading(false) })
     return () => { cancelled = true }
   }, [id, monastery])
+
+  useEffect(() => {
+    let cancelled = false
+    async function fetchUserLocations() {
+      try {
+        const response = await locationAPI.getAllActiveLocations()
+        if (!cancelled) setUserLocations(response.data || [])
+      } catch (error) {
+        console.error('Failed to fetch user locations:', error)
+      }
+    }
+    fetchUserLocations()
+    return () => { cancelled = true }
+  }, [])
 
   const handleBookingSubmit = async (e) => {
     e.preventDefault()
@@ -101,7 +134,7 @@ export default function MonasteryDetail() {
             <h1 className="font-heading text-3xl sm:text-4xl font-bold text-amber-50">{monastery.name}</h1>
             <p className="text-stone-400 mt-1 flex items-center gap-1">
               <MapPin className="w-4 h-4" /> 
-              {monastery.location?.district || monastery.location?.village || monastery.location}
+              {monastery.location?.district || monastery.location?.village || monastery.region || 'Sikkim'}
               {monastery.location?.state && `, ${monastery.location.state}`}
             </p>
             
@@ -337,6 +370,95 @@ export default function MonasteryDetail() {
             </section>
           )}
         </div>
+
+        {/* Map Section */}
+        {monastery.coordinates?.latitude && monastery.coordinates?.longitude && (
+          <section className="mb-8">
+            <h2 className="font-heading text-xl font-bold text-amber-50 mb-4 flex items-center gap-2">
+              <MapPin className="w-5 h-5" /> Location & Nearby Places
+            </h2>
+            <div className="rounded-2xl overflow-hidden border border-amber-900/40 relative z-0" style={{ height: '50vh', minHeight: '400px' }}>
+              <MapContainer 
+                center={[monastery.coordinates.latitude, monastery.coordinates.longitude]} 
+                zoom={12} 
+                scrollWheelZoom 
+                className="h-full w-full"
+              >
+                <TileLayer
+                  attribution='&copy; OpenStreetMap contributors'
+                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                />
+
+                {/* This Monastery Marker */}
+                <Marker 
+                  position={[monastery.coordinates.latitude, monastery.coordinates.longitude]}
+                  icon={L.divIcon({
+                    html: `
+                      <div class="w-12 h-12 rounded-full border-3 border-amber-400 overflow-hidden shadow-xl cursor-pointer transform hover:scale-110 transition-transform">
+                        <img src="${monastery.imageUrl || 'https://images.unsplash.com/photo-1626621341517-bbf3d9990a23?w=200'}" alt="${monastery.name}" class="w-full h-full object-cover" onerror="this.style.display='none'; this.parentElement.innerHTML='<div class=\\'w-full h-full bg-amber-500 flex items-center justify-center text-2xl\\'>🏛️</div>'" />
+                      </div>
+                    `,
+                    iconSize: [48, 48],
+                    className: 'monastery-icon',
+                  })}
+                >
+                  <Popup>
+                    <div className="text-sm max-w-xs">
+                      <p className="font-semibold text-amber-600 mb-1">{monastery.name}</p>
+                      <p className="text-xs text-stone-600">{monastery.location?.district || monastery.location?.village || 'Sikkim'}</p>
+                    </div>
+                  </Popup>
+                </Marker>
+
+                {/* User Locations (Businesses) */}
+                {userLocations.map((location) => {
+                  if (!location.location?.coordinates?.[1] || !location.location?.coordinates?.[0]) return null
+                  const typeMeta = getTypeMeta(location.type)
+                  
+                  return (
+                    <Marker
+                      key={location._id}
+                      position={[location.location.coordinates[1], location.location.coordinates[0]]}
+                      icon={L.divIcon({
+                        html: `
+                          <div class="w-10 h-10 rounded-full border-2 shadow-lg cursor-pointer transform hover:scale-110 transition-transform" style="border-color:${typeMeta.color}; background:linear-gradient(135deg, ${typeMeta.color} 0%, ${typeMeta.color}dd 100%); display:flex; align-items:center; justify-content:center; font-size:18px; box-shadow: 0 2px 8px rgba(0,0,0,0.25);">
+                            <span style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));">${typeMeta.symbol}</span>
+                          </div>
+                        `,
+                        iconSize: [40, 40],
+                        className: 'custom-location-icon',
+                      })}
+                    >
+                      <Popup>
+                        <div className="text-sm max-w-xs">
+                          {location.imageUrl && (
+                            <img 
+                              src={location.imageUrl} 
+                              alt={location.name} 
+                              className="w-full h-24 object-cover rounded mb-2"
+                            />
+                          )}
+                          <p className="font-semibold text-sm">{location.name}</p>
+                          <p className="text-xs font-medium" style={{ color: typeMeta.color }}>{typeMeta.symbol} {location.type || 'Other'}</p>
+                          <p className="text-xs mt-1">{location.location.address}</p>
+                          {location.phone && (
+                            <p className="text-xs mt-1">Ph: {location.phone}</p>
+                          )}
+                          <Link to={`/location/${location._id}`} className="text-xs text-blue-700 underline mt-2 inline-block">
+                            View details
+                          </Link>
+                        </div>
+                      </Popup>
+                    </Marker>
+                  )
+                })}
+              </MapContainer>
+            </div>
+            <p className="text-stone-400 text-xs mt-2">
+              {userLocations.length} nearby {userLocations.length === 1 ? 'business' : 'businesses'} shown on map
+            </p>
+          </section>
+        )}
 
         {/* Travel guide */}
         <section className="mb-8">

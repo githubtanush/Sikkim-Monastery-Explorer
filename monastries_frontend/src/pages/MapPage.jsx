@@ -1,17 +1,33 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet'
 import L from 'leaflet'
 import 'leaflet/dist/leaflet.css'
-import { MapPin, Navigation } from 'lucide-react'
+import { MapPin, Navigation, Store } from 'lucide-react'
 import { Layout } from '../components/Layout'
 import { useMonasteries } from '../context/MonasteryContext'
+import { locationAPI } from '../api'
 
 const DEFAULT_CENTER = [27.533, 88.512]
 const SIKKIM_BOUNDS = [
   [26.8, 87.5], // Southwest corner (South, West)
   [28.5, 89.6]  // Northeast corner (North, East)
 ]
+
+const TYPE_META = {
+  Hotel: { symbol: '🏨', color: '#3b82f6', label: 'Hotel' },
+  Restaurant: { symbol: '🍽️', color: '#ef4444', label: 'Restaurant' },
+  Shop: { symbol: '🛍️', color: '#a855f7', label: 'Shop' },
+  'Tourist Attraction': { symbol: '📸', color: '#f59e0b', label: 'Tourist Attraction' },
+  'Food Court': { symbol: '🍜', color: '#f97316', label: 'Food Court' },
+  Cafe: { symbol: '☕', color: '#14b8a6', label: 'Cafe' },
+  Guesthouse: { symbol: '🏠', color: '#22c55e', label: 'Guesthouse' },
+  Other: { symbol: '📍', color: '#10b981', label: 'Other' },
+}
+
+function getTypeMeta(type) {
+  return TYPE_META[type] || TYPE_META.Other
+}
 
 function getLocationLabel(monastery) {
   if (typeof monastery.location === 'string') return monastery.location
@@ -24,8 +40,28 @@ function getLocationLabel(monastery) {
 }
 
 export default function MapPage() {
-  const { monasteries, loading } = useMonasteries()
+  const { monasteries, loading: monasteryLoading } = useMonasteries()
+  const [userLocations, setUserLocations] = useState([])
+  const [loadingLocations, setLoadingLocations] = useState(false)
   const [failedImages, setFailedImages] = useState(new Set())
+  const businessLabel = userLocations.length === 1 ? 'business' : 'businesses'
+
+  useEffect(() => {
+    fetchUserLocations()
+  }, [])
+
+  const fetchUserLocations = async () => {
+    try {
+      setLoadingLocations(true)
+      const response = await locationAPI.getAllActiveLocations()
+      setUserLocations(response.data || [])
+    } catch (error) {
+      console.error('Failed to fetch user locations:', error)
+      // Don't show error toast, just silently fail
+    } finally {
+      setLoadingLocations(false)
+    }
+  }
 
   const monasteryMarkers = useMemo(() => {
     return (monasteries || []).filter((m) => Number.isFinite(m?.coordinates?.latitude) && Number.isFinite(m?.coordinates?.longitude))
@@ -36,38 +72,56 @@ export default function MapPage() {
   }, [monasteries])
 
   const mapCenter = useMemo(() => {
-    if (!monasteryMarkers.length) return DEFAULT_CENTER
-    const sum = monasteryMarkers.reduce(
-      (acc, m) => ({
-        lat: acc.lat + m.coordinates.latitude,
-        lng: acc.lng + m.coordinates.longitude,
-      }),
-      { lat: 0, lng: 0 }
-    )
+    if (!monasteryMarkers.length && !userLocations.length) return DEFAULT_CENTER
+    
+    let totalLat = 0, totalLng = 0, count = 0
+    
+    monasteryMarkers.forEach(m => {
+      totalLat += m.coordinates.latitude
+      totalLng += m.coordinates.longitude
+      count++
+    })
 
-    return [sum.lat / monasteryMarkers.length, sum.lng / monasteryMarkers.length]
-  }, [monasteryMarkers])
+    userLocations.forEach(loc => {
+      if (loc.location && loc.location.coordinates) {
+        totalLat += loc.location.coordinates[1]
+        totalLng += loc.location.coordinates[0]
+        count++
+      }
+    })
+
+    return count > 0 ? [totalLat / count, totalLng / count] : DEFAULT_CENTER
+  }, [monasteryMarkers, userLocations])
+
+  const userLocationTypeCounts = useMemo(() => {
+    return userLocations.reduce((acc, loc) => {
+      const type = loc?.type || 'Other'
+      acc[type] = (acc[type] || 0) + 1
+      return acc
+    }, {})
+  }, [userLocations])
 
   return (
     <Layout>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
         <div className="mb-6">
-          <h1 className="font-heading text-3xl sm:text-4xl font-bold text-amber-50">Sikkim Monasteries Map</h1>
+          <h1 className="font-heading text-3xl sm:text-4xl font-bold text-amber-50">Sikkim Map</h1>
           <p className="text-stone-400 mt-2">
-            Free OpenStreetMap view with monastery image markers ({monasteryMarkers.length}/{monasteries.length || 0} mapped)
+            Explore monasteries and local businesses ({monasteryMarkers.length}/{monasteries.length || 0} monasteries, {userLocations.length} {businessLabel})
           </p>
         </div>
 
-        {loading ? (
-          <div className="glass rounded-2xl p-8 text-stone-300">Loading monasteries...</div>
+        {monasteryLoading || loadingLocations ? (
+          <div className="glass rounded-2xl p-8 text-stone-300">Loading map data...</div>
         ) : (
-          <div className="rounded-2xl overflow-hidden border border-amber-900/40" style={{ height: '70vh' }}>
+          <div className="rounded-2xl overflow-hidden border border-amber-900/40 relative z-0" style={{ height: '70vh' }}>
             <MapContainer center={mapCenter} zoom={9} scrollWheelZoom maxBounds={SIKKIM_BOUNDS} maxBoundsViscosity={1.0} minZoom={8} maxZoom={14} className="h-full w-full">
               <TileLayer
                 attribution='&copy; OpenStreetMap contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
               />
 
+              {/* Monastery Markers */}
               {monasteryMarkers.map((monastery) => {
                 const hasValidImage = monastery.imageUrl && !failedImages.has(monastery._id)
 
@@ -112,11 +166,59 @@ export default function MapPage() {
                   </Marker>
                 )
               })}
+
+              {/* User Location Markers */}
+              {userLocations.map((location) => {
+                if (!location.location || !location.location.coordinates) return null
+
+                const [lng, lat] = location.location.coordinates
+                const typeMeta = getTypeMeta(location.type)
+
+                const customIcon = L.divIcon({
+                  html: `
+                    <div class="w-10 h-10 rounded-full border-2 shadow-lg cursor-pointer transform hover:scale-110 transition-transform" style="border-color:${typeMeta.color}; background:linear-gradient(135deg, ${typeMeta.color} 0%, ${typeMeta.color}dd 100%); display:flex; align-items:center; justify-content:center; font-size:18px; box-shadow: 0 2px 8px rgba(0,0,0,0.25);">
+                      <span style="filter: drop-shadow(0 1px 1px rgba(0,0,0,0.2));">${typeMeta.symbol}</span>
+                    </div>
+                  `,
+                  iconSize: [40, 40],
+                  className: 'custom-location-icon',
+                })
+
+                return (
+                  <Marker
+                    key={location._id}
+                    position={[lat, lng]}
+                    icon={customIcon}
+                  >
+                    <Popup>
+                      <div className="max-w-[230px] text-stone-900">
+                        {location.imageUrl && !failedImages.has(location._id) && (
+                          <img
+                            src={location.imageUrl}
+                            alt={location.name}
+                            className="w-full h-32 object-cover rounded-md mb-2"
+                            onError={() => setFailedImages(prev => new Set([...prev, location._id]))}
+                          />
+                        )}
+                        <p className="font-semibold text-sm">{location.name}</p>
+                        <p className="text-xs font-medium" style={{ color: typeMeta.color }}>{typeMeta.symbol} {location.type || 'Other'}</p>
+                        <p className="text-xs mt-1">{location.location.address}</p>
+                        {location.phone && (
+                          <p className="text-xs mt-1">Ph: {location.phone}</p>
+                        )}
+                        <Link to={`/location/${location._id}`} className="text-xs text-blue-700 underline mt-2 inline-block">
+                          View details
+                        </Link>
+                      </div>
+                    </Popup>
+                  </Marker>
+                )
+              })}
             </MapContainer>
           </div>
         )}
 
-        <section className="mt-8 grid md:grid-cols-2 gap-6">
+        <section className="mt-8 grid md:grid-cols-2 xl:grid-cols-4 gap-6">
           <div className="glass rounded-2xl p-5">
             <h2 className="font-heading text-xl text-amber-50 mb-3 flex items-center gap-2">
               <MapPin className="w-5 h-5" /> Mapped Monasteries
@@ -129,6 +231,43 @@ export default function MapPage() {
                   <Link to={`/monastery/${m._id}`} className="text-amber-400 hover:underline text-xs">Open</Link>
                 </li>
               ))}
+            </ul>
+          </div>
+
+          <div className="glass rounded-2xl p-5">
+            <h2 className="font-heading text-xl text-amber-50 mb-3 flex items-center gap-2">
+              <Store className="w-5 h-5" /> Listed Businesses
+            </h2>
+            <p className="text-stone-400 text-sm mb-3">Active listings with their type.</p>
+            <ul className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {userLocations.length > 0 ? userLocations.map((location) => (
+                <li key={location._id} className="text-sm text-emerald-100/90 flex items-center justify-between gap-3">
+                  <span className="truncate">{getTypeMeta(location.type).symbol} {location.name}</span>
+                  <Link to={`/location/${location._id}`} className="text-emerald-400 hover:underline text-xs flex-shrink-0">Open</Link>
+                </li>
+              )) : (
+                <li className="text-sm text-stone-400">No listings yet.</li>
+              )}
+            </ul>
+          </div>
+
+          <div className="glass rounded-2xl p-5">
+            <h2 className="font-heading text-xl text-amber-50 mb-3 flex items-center gap-2">
+              <Store className="w-5 h-5" /> Type
+            </h2>
+            <p className="text-stone-400 text-sm mb-3">Navigation legend by business type.</p>
+            <ul className="space-y-2 max-h-72 overflow-y-auto pr-1">
+              {Object.keys(userLocationTypeCounts).length > 0 ? Object.entries(userLocationTypeCounts).map(([type, count]) => {
+                const meta = getTypeMeta(type)
+                return (
+                  <li key={type} className="text-sm text-amber-100/90 flex items-center justify-between gap-3">
+                    <span>{meta.symbol} {meta.label}</span>
+                    <span className="text-xs text-stone-300">{count}</span>
+                  </li>
+                )
+              }) : (
+                <li className="text-sm text-stone-400">No types available yet.</li>
+              )}
             </ul>
           </div>
 

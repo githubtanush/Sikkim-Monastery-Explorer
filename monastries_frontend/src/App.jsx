@@ -16,6 +16,8 @@ import Contribute from './pages/Contribute'
 import Leaderboard from './pages/Leaderboard'
 import Admin from './pages/Admin'
 import MyContributions from './pages/MyContributions'
+import MyLocations from './pages/MyLocations'
+import LocationDetail from './pages/LocationDetail'
 import NotFound from './pages/NotFound'
 import './App.css'
 
@@ -32,9 +34,11 @@ export default function App() {
           <Route path="/map" element={<MapPage />} />
           <Route path="/monastery/:id" element={<MonasteryDetail />} />
           <Route path="/monastery/:id/wiki" element={<MonasteryWiki />} />
+          <Route path="/location/:id" element={<LocationDetail />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/my-contributions" element={<MyContributions />} />
+          <Route path="/my-locations" element={<MyLocations />} />
           <Route path="/contribute" element={<Contribute />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/admin" element={<Admin />} />
