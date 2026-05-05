@@ -8,16 +8,12 @@ const helmet = require("helmet");
 const pinoHttp = require("pino-http");
 require('dotenv').config();
 
+const config = require("./config/env");
 const logger = require("./utils/logger");
 const { errorHandler, notFound } = require("./middlewares/errorHandler");
 const { apiLimiter } = require("./middlewares/rateLimiter");
 
-// Parse allowed origins from environment variable
-const allowedOrigins = process.env.ALLOWED_ORIGINS 
-  ? process.env.ALLOWED_ORIGINS.split(',').map(origin => origin.trim())
-  : ['http://localhost:3000', 'http://localhost:5173'];
-
-const allowedOriginsSet = new Set(allowedOrigins);
+const allowedOriginsSet = new Set(config.allowedOrigins);
 
 // CORS configuration for frontend
 const corsOptions = {
@@ -35,7 +31,7 @@ const corsOptions = {
 
 // Security middleware - helmet
 app.use(helmet({
-  contentSecurityPolicy: process.env.NODE_ENV === 'production' ? undefined : false,
+  contentSecurityPolicy: config.nodeEnv === 'production' ? undefined : false,
   crossOriginEmbedderPolicy: false
 }));
 
@@ -116,11 +112,11 @@ const gracefulShutdown = (signal) => {
     });
   });
 
-  // Force shutdown after 30 seconds
+  // Force shutdown after timeout
   setTimeout(() => {
     logger.error('Forced shutdown after timeout');
     process.exit(1);
-  }, 30000);
+  }, config.shutdownTimeout);
 };
 
 let server;
@@ -128,8 +124,8 @@ let server;
 connectDB()
     .then(() => {
         logger.info("Database connection established");
-        server = app.listen(process.env.PORT, () => {
-            logger.info(`Server running on port ${process.env.PORT} in ${process.env.NODE_ENV || 'development'} mode`);
+        server = app.listen(config.port, () => {
+            logger.info(`Server running on port ${config.port} in ${config.nodeEnv} mode`);
         });
 
         // Handle graceful shutdown

@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
+const config = require("../config/env");
 const logger = require("../utils/logger");
 const { AppError } = require("./errorHandler");
 
@@ -11,7 +12,7 @@ const adminAuth = async (req, res, next) => {
             throw new AppError("Authentication required", 401);
         }
 
-        const decodedObj = await jwt.verify(token, process.env.JWT_SECRET);
+        const decodedObj = await jwt.verify(token, config.jwtSecret);
         const { _id } = decodedObj;
         const user = await User.findById(_id);
         
@@ -46,7 +47,7 @@ const userAuth = async (req, res, next) => {
             throw new AppError("Authentication required. Please log in", 401);
         }
 
-        const decodedObj = await jwt.verify(token, process.env.JWT_SECRET);
+        const decodedObj = await jwt.verify(token, config.jwtSecret);
         const { _id } = decodedObj;
         const user = await User.findById(_id);
         

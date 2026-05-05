@@ -1,6 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const logger = require('../utils/logger');
+const config = require('../config/env');
 
 const healthRouter = express.Router();
 
@@ -11,7 +12,7 @@ healthRouter.get('/health', (req, res) => {
         status: 'ok',
         uptime: process.uptime(),
         timestamp: new Date().toISOString(),
-        environment: process.env.NODE_ENV || 'development'
+        environment: config.nodeEnv
     });
 });
 
@@ -22,7 +23,7 @@ healthRouter.get('/health/detailed', async (req, res) => {
         status: 'ok',
         timestamp: new Date().toISOString(),
         uptime: process.uptime(),
-        environment: process.env.NODE_ENV || 'development',
+        environment: config.nodeEnv,
         services: {
             database: 'unknown',
             memory: 'ok',

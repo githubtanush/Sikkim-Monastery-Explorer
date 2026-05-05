@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const config = require('../config/env');
 
 // User validation schemas
 const signupSchema = z.object({
@@ -104,7 +105,7 @@ const createReviewSchema = z.object({
     monasteryId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid monastery ID').optional(),
     guideId: z.string().regex(/^[0-9a-fA-F]{24}$/, 'Invalid guide ID').optional(),
     rating: z.number().min(1, 'Rating must be at least 1').max(5, 'Rating must not exceed 5'),
-    comment: z.string().min(10, 'Comment must be at least 10 characters').max(1000, 'Comment must not exceed 1000 characters'),
+    comment: z.string().min(config.review.minLength, `Comment must be at least ${config.review.minLength} characters`).max(config.review.maxLength, `Comment must not exceed ${config.review.maxLength} characters`),
     visitDate: z.string().datetime().optional()
 }).refine(data => data.monasteryId || data.guideId, {
     message: 'Either monasteryId or guideId must be provided'
@@ -145,14 +146,14 @@ const createGuideProfileSchema = z.object({
         halfDay: z.number().min(0).optional(),
         fullDay: z.number().min(0).optional()
     }),
-    bio: z.string().min(50, 'Bio must be at least 50 characters').max(1000),
+    bio: z.string().min(config.bio.minLength, `Bio must be at least ${config.bio.minLength} characters`).max(config.bio.maxLength),
     certifications: z.array(z.string()).optional()
 });
 
 // Pagination validation
 const paginationSchema = z.object({
     page: z.string().regex(/^\d+$/).transform(Number).pipe(z.number().min(1)).optional().default('1'),
-    limit: z.string().regex(/^\d+$/).transform(Number).pipe(z.number().min(1).max(100)).optional().default('10')
+    limit: z.string().regex(/^\d+$/).transform(Number).pipe(z.number().min(1).max(config.pagination.maxPageSize)).optional().default(String(config.pagination.defaultPageSize))
 });
 
 // MongoDB ObjectId validation

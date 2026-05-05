@@ -2,6 +2,7 @@ const express = require('express');
 const authRouter = express.Router();
 const bcrypt = require("bcryptjs");
 const User = require("../models/user");
+const config = require("../config/env");
 const { signupSchema, loginSchema, validate } = require("../utils/zodSchemas");
 const { asyncHandler } = require("../middlewares/errorHandler");
 const { authLimiter } = require("../middlewares/rateLimiter");
@@ -12,7 +13,7 @@ authRouter.post("/signup", authLimiter, validate(signupSchema), asyncHandler(asy
     const { firstName, lastName, emailId, password, age, gender } = req.body;
     
     // Encrypt the password
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordHash = await bcrypt.hash(password, config.bcryptSaltRounds);
 
     // Create new user instance
     const user = new User({
@@ -33,9 +34,9 @@ authRouter.post("/signup", authLimiter, validate(signupSchema), asyncHandler(asy
     
     const cookieOptions = {
         httpOnly: true,
-        sameSite: process.env.COOKIE_SAME_SITE || "Lax",
-        secure: process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === 'true',
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        sameSite: config.cookie.sameSite,
+        secure: config.cookie.secure,
+        maxAge: config.cookie.maxAge
     };
     
     res.cookie("token", token, cookieOptions);
@@ -86,9 +87,9 @@ authRouter.post("/login", authLimiter, validate(loginSchema), asyncHandler(async
     
     const cookieOptions = {
         httpOnly: true,
-        sameSite: process.env.COOKIE_SAME_SITE || "Lax",
-        secure: process.env.NODE_ENV === 'production' || process.env.COOKIE_SECURE === 'true',
-        maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        sameSite: config.cookie.sameSite,
+        secure: config.cookie.secure,
+        maxAge: config.cookie.maxAge
     };
     
     res.cookie("token", token, cookieOptions);

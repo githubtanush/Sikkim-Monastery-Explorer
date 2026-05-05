@@ -1,9 +1,10 @@
 const pino = require('pino');
+const config = require('../config/env');
 
 // Create logger instance with appropriate configuration
 const logger = pino({
-    level: process.env.LOG_LEVEL || 'info',
-    transport: process.env.NODE_ENV !== 'production' ? {
+    level: config.logLevel,
+    transport: config.nodeEnv !== 'production' ? {
         target: 'pino-pretty',
         options: {
             colorize: true,
