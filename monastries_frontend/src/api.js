@@ -3,10 +3,22 @@ import axios from 'axios'
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3777'
 
 export const api = axios.create({
-  baseURL: API_URL,
+  baseURL: `${API_URL}/api/v1`,
   withCredentials: true,
   headers: { 'Content-Type': 'application/json' },
 })
+
+// Add response interceptor to handle new response format
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Handle rate limiting
+    if (error.response?.status === 429) {
+      console.warn('Rate limit exceeded:', error.response.data?.message)
+    }
+    return Promise.reject(error)
+  }
+)
 
 // Parse error response (backend may send JSON or text)
 export function getErrorMessage(err) {
